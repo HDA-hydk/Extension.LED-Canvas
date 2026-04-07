@@ -1,7 +1,8 @@
 import './App.css'
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
-import { Magnet, FilePlus2, Plus, X, Pencil, Check, ChevronDown, Search } from 'lucide-react'
+import { useEffect, useState, useRef, useMemo } from 'react'
+import { Magnet, Plus, X, Pencil, Check, ChevronDown, Search, CircleHelp } from 'lucide-react'
 import { DeviceTree } from '@/components/DeviceTree'
+import { LayoutManager } from '@/components/LayoutManager'
 import { VisualGrid } from '@/components/VisualGrid'
 import { useCanvasStore, getTemporalStore, beginCanvasHistoryBatch, endCanvasHistoryBatch } from '@/lib/canvasStore'
 import { useBridgeStore } from '@/lib/bridge'
@@ -266,13 +267,10 @@ function App() {
   const createLayout = useBridgeStore(s => s.createLayout)
   const deleteLayout = useBridgeStore(s => s.deleteLayout)
   const renameLayout = useBridgeStore(s => s.renameLayout)
-  const registerCanvas = useBridgeStore(s => s.registerCanvas)
-  const unregisterCanvas = useBridgeStore(s => s.unregisterCanvas)
   const syncPlacements = useBridgeStore(s => s.syncPlacements)
   const updateSnap = useBridgeStore(s => s.updateSnap)
 
   const activeLayout = layouts.find(l => l.id === activeLayoutId) ?? null
-  const canvasRegistered = activeLayout?.registered ?? false
   const canvasWidth = Math.max(1, Math.round(canvasBounds.width))
   const canvasHeight = Math.max(1, Math.round(canvasBounds.height))
 
@@ -335,17 +333,8 @@ function App() {
     updateSnap(activeLayoutId, snapToGrid)
   }, [snapToGrid, activeLayoutId, updateSnap])
 
-  const handleToggleRegister = useCallback(() => {
-    if (!activeLayoutId) return
-    if (canvasRegistered) {
-      unregisterCanvas(activeLayoutId)
-    } else {
-      registerCanvas(activeLayoutId, canvasWidth, canvasHeight)
-    }
-  }, [activeLayoutId, canvasRegistered, canvasWidth, canvasHeight, registerCanvas, unregisterCanvas])
-
   return (
-    <div className="h-screen w-screen p-[10px] flex flex-col gap-[10px] overflow-hidden">
+    <div className="relative h-screen w-screen p-[10px] flex flex-col gap-[10px] overflow-hidden">
       {/* ── Top bar: layout selector (left) + controls (right) ── */}
       <div className="h-[48px] shrink-0 flex items-center gap-[10px]">
         {/* Left: layout dropdown + rename */}
@@ -386,19 +375,6 @@ function App() {
         />
         <button
           className={cn(
-            'h-[40px] px-[14px] rounded-[10px] border cursor-pointer transition-colors flex items-center justify-center gap-[6px] text-[13px] font-medium',
-            canvasRegistered
-              ? 'bg-primary text-primary-foreground border-primary'
-              : 'bg-secondary border-border hover:bg-accent',
-          )}
-          onClick={handleToggleRegister}
-          title={canvasRegistered ? t('canvas.registered') : t('canvas.unregistered')}
-        >
-          <FilePlus2 className="size-4" />
-          {canvasRegistered ? t('canvas.deactivate') : t('canvas.register')}
-        </button>
-        <button
-          className={cn(
             'w-[40px] h-[40px] rounded-[10px] border cursor-pointer transition-colors flex items-center justify-center',
             snapToGrid
               ? 'bg-primary text-primary-foreground border-primary'
@@ -418,9 +394,34 @@ function App() {
           <VisualGrid />
         </div>
 
-        {/* Right panel – device tree */}
-        <div className="shrink-0 rounded-[10px] bg-card border border-border/60 overflow-hidden" style={{ width: 'clamp(260px, 26%, 380px)' }}>
-          <DeviceTree />
+        {/* Right panel – device tree + layout manager */}
+        <div className="shrink-0 min-h-0 flex flex-col gap-[10px]" style={{ width: 'clamp(260px, 26%, 380px)' }}>
+          <div className="basis-1/2 min-h-0 rounded-[10px] bg-card border border-border/60 overflow-hidden">
+            <DeviceTree />
+          </div>
+          <div className="basis-1/2 min-h-0 rounded-[10px] bg-card border border-border/60 overflow-hidden">
+            <LayoutManager />
+          </div>
+        </div>
+      </div>
+
+      <div className="absolute left-[16px] bottom-[16px] z-30">
+        <div className="group relative">
+          <button
+            type="button"
+            className="flex h-[36px] w-[36px] items-center justify-center rounded-full border border-zinc-700 bg-zinc-800 text-zinc-100 transition-colors hover:bg-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500/60"
+            aria-label={t('canvas.help.ariaLabel')}
+            aria-describedby="led-canvas-help"
+          >
+            <CircleHelp className="size-4" />
+          </button>
+          <div
+            id="led-canvas-help"
+            role="tooltip"
+            className="pointer-events-none absolute bottom-[calc(100%+10px)] left-0 w-[280px] rounded-[12px] border border-zinc-700 bg-zinc-900 px-[12px] py-[10px] text-[12px] leading-[1.5] text-zinc-100 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+          >
+            {t('canvas.help.description')}
+          </div>
         </div>
       </div>
     </div>
