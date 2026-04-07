@@ -69,6 +69,7 @@ export interface EffectInfo {
 
 export interface LayoutVirtualDeviceState {
   power_on: boolean
+  paused: boolean
   effect_id: string | null
   effect_params: Record<string, unknown>
 }
@@ -110,6 +111,7 @@ interface BridgeState {
   updatePlacementBrightness: (layoutId: string, placementId: string, brightness: number) => void
   updateSnap: (layoutId: string, snap: boolean) => void
   setVirtualDevicePower: (layoutId: string, powerOn: boolean) => void
+  setVirtualDevicePaused: (layoutId: string, paused: boolean) => void
   setVirtualDeviceEffect: (layoutId: string, effectId: string | null) => void
   updateVirtualDeviceEffectParams: (layoutId: string, params: Record<string, unknown>) => void
   resetVirtualDeviceEffectParams: (layoutId: string) => void
@@ -173,6 +175,7 @@ function normalizeLayouts(layouts: unknown): LayoutInfo[] {
       placements: Array.isArray(layout.placements) ? layout.placements : [],
       virtual_device: {
         power_on: layout.virtual_device?.power_on !== false,
+        paused: layout.virtual_device?.paused === true,
         effect_id: layout.virtual_device?.effect_id ?? null,
         effect_params: layout.virtual_device?.effect_params ?? {},
       },
@@ -405,6 +408,10 @@ export const useBridgeStore = create<BridgeState>((set, get) => {
 
     setVirtualDevicePower(layoutId, powerOn) {
       sendToExt({ type: 'set_layout_virtual_power', layout_id: layoutId, power_on: powerOn })
+    },
+
+    setVirtualDevicePaused(layoutId, paused) {
+      sendToExt({ type: 'set_layout_virtual_paused', layout_id: layoutId, paused })
     },
 
     setVirtualDeviceEffect(layoutId, effectId) {

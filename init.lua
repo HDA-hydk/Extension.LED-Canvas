@@ -105,6 +105,7 @@ local function normalize_virtual_device_config(value)
     end
     return {
         power_on = raw.power_on ~= false,
+        paused = raw.paused == true,
         effect_id = effect_id,
         effect_params = effect_id and (type(raw.effect_params) == "table" and clone_value(raw.effect_params) or {}) or {},
     }
@@ -674,6 +675,14 @@ local function set_layout_virtual_power(layout, power_on)
     return true
 end
 
+local function set_layout_virtual_paused(layout, paused)
+    layout.virtual_device.paused = paused == true
+    if not layout.registered then return true end
+    local ok, err = pcall(ext.set_scope_mode_paused, layout_scope(layout), layout.virtual_device.paused)
+    if not ok then return false, err end
+    return true
+end
+
 local function set_layout_virtual_effect(layout, effect_id)
     local next_id = (type(effect_id) == "string" and effect_id ~= "") and effect_id or nil
     layout.virtual_device.effect_id = next_id
@@ -712,11 +721,16 @@ end
 local function apply_layout_virtual_state(layout)
     if not layout.registered then return true end
     local vd = layout.virtual_device
+    local scope = layout_scope(layout)
     local params = next(vd.effect_params) and vd.effect_params or nil
-    local ok, err = pcall(ext.set_scope_effect, layout_scope(layout), vd.effect_id, params)
+    local ok, err = pcall(ext.set_scope_effect, scope, vd.effect_id, params)
     if not ok then return false, err end
-    ok, err = pcall(ext.set_scope_power, layout_scope(layout), not vd.power_on)
+    ok, err = pcall(ext.set_scope_power, scope, not vd.power_on)
     if not ok then return false, err end
+    if vd.paused then
+        ok, err = pcall(ext.set_scope_mode_paused, scope, true)
+        if not ok then return false, err end
+    end
     return true
 end
 
@@ -773,8 +787,11 @@ local function read_live_virtual_state(layout)
         power_on = not power.effective_is_off
     end
 
+    local paused = type(mode) == "table" and mode.effective_is_paused == true
+
     return {
         power_on = power_on,
+        paused = paused,
         effect_id = effect_id,
         effect_params = effect_params,
     }
@@ -1197,6 +1214,7 @@ local function layout_summary(layout, device_lookup)
         placements  = placements,
         virtual_device = {
             power_on = layout.virtual_device.power_on,
+            paused = layout.virtual_device.paused,
             effect_id = layout.virtual_device.effect_id,
             effect_params = clone_value(layout.virtual_device.effect_params),
         },
@@ -1429,6 +1447,13 @@ function P.on_page_message(msg)
         local layout = find_layout(msg.layout_id or config.active_layout_id)
         if layout then
             with_virtual_device_rollback(layout, function() return set_layout_virtual_power(layout, msg.power_on) end)
+        end
+
+    -- ── Virtual-device mode pause ──
+    elseif msg.type == "set_layout_virtual_paused" then
+        local layout = find_layout(msg.layout_id or config.active_layout_id)
+        if layout then
+            with_virtual_device_rollback(layout, function() return set_layout_virtual_paused(layout, msg.paused) end)
         end
 
     -- ── Virtual-device effect ──

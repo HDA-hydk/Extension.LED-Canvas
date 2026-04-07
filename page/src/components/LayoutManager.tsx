@@ -488,6 +488,7 @@ export function LayoutManager() {
   const layouts = useBridgeStore(s => s.layouts)
   const activeLayoutId = useBridgeStore(s => s.activeLayoutId)
   const setVirtualDevicePower = useBridgeStore(s => s.setVirtualDevicePower)
+  const setVirtualDevicePaused = useBridgeStore(s => s.setVirtualDevicePaused)
   const setVirtualDeviceEffect = useBridgeStore(s => s.setVirtualDeviceEffect)
   const updateVirtualDeviceEffectParams = useBridgeStore(s => s.updateVirtualDeviceEffectParams)
   const resetVirtualDeviceEffectParams = useBridgeStore(s => s.resetVirtualDeviceEffectParams)
@@ -581,6 +582,22 @@ export function LayoutManager() {
                         onToggle={() => setVirtualDevicePower(
                           activeLayout.id,
                           !activeLayout.virtual_device.power_on,
+                        )}
+                      />
+                    </div>
+                  )}
+                />
+                <BasicSettingRow
+                  label={t('layoutManager.paused')}
+                  disabled={!isRegistered}
+                  control={(
+                    <div className="flex justify-end">
+                      <SettingSwitch
+                        checked={activeLayout.virtual_device.paused}
+                        disabled={!isRegistered}
+                        onToggle={() => setVirtualDevicePaused(
+                          activeLayout.id,
+                          !activeLayout.virtual_device.paused,
                         )}
                       />
                     </div>

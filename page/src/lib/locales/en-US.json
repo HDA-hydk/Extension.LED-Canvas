@@ -37,6 +37,7 @@
   "layoutManager.status.registered": "Virtual device registered",
   "layoutManager.status.unregistered": "Virtual device not registered",
   "layoutManager.power": "Virtual device power",
+  "layoutManager.paused": "Pause mode",
   "layoutManager.effect": "Effect",
   "layoutManager.effect.none": "No effect",
   "layoutManager.effectSettings": "Effect Settings",
