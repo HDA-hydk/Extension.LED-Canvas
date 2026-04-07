@@ -1,7 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Plus, RotateCcw, X } from 'lucide-react'
 import { ScrollArea } from 'radix-ui'
-import { useCanvasStore } from '@/lib/canvasStore'
 import {
   useBridgeStore,
   type EffectInfo,
@@ -40,10 +39,6 @@ function cloneValue<T>(value: T): T {
   return value
 }
 
-function getDefaultParamValue(param: EffectParamInfo): unknown {
-  return cloneValue(param.default)
-}
-
 function buildEffectiveParams(
   schema: EffectParamInfo[],
   current: Record<string, unknown>,
@@ -51,7 +46,7 @@ function buildEffectiveParams(
   const next = { ...current }
   for (const param of schema) {
     if (!(param.key in next) && param.default !== undefined) {
-      next[param.key] = getDefaultParamValue(param)
+      next[param.key] = cloneValue(param.default)
     }
   }
   return next
@@ -104,16 +99,12 @@ function normalizeRangeValue(param: EffectParamInfo, value: unknown): [number, n
 function normalizeMultiColorValue(param: EffectParamInfo, value: unknown): string[] {
   const fallback = Array.isArray(param.default) ? param.default : ['#ffffff']
   const raw = Array.isArray(value) ? value : fallback
-  const normalized = raw
-    .map(color => normalizeColor(color))
-    .filter(Boolean)
-
+  const normalized = raw.map(color => normalizeColor(color)).filter(Boolean)
   return normalized.length > 0 ? normalized : ['#ffffff']
 }
 
 function serializeOptionValue(value: unknown) {
-  const serialized = JSON.stringify(value)
-  return typeof serialized === 'string' ? serialized : String(value)
+  return JSON.stringify(value) ?? String(value)
 }
 
 function parseOptionValue(value: string): unknown {
@@ -122,23 +113,6 @@ function parseOptionValue(value: string): unknown {
   } catch {
     return value
   }
-}
-
-function formatDebugJson(value: unknown): string {
-  try {
-    return JSON.stringify(value, null, 2)
-  } catch {
-    return String(value)
-  }
-}
-
-function areParamValuesEqual(left: unknown, right: unknown): boolean {
-  if (Array.isArray(left) && Array.isArray(right)) {
-    if (left.length !== right.length) return false
-    return left.every((entry, index) => areParamValuesEqual(entry, right[index]))
-  }
-
-  return Object.is(left, right)
 }
 
 function SettingSwitch({
@@ -241,7 +215,7 @@ function EffectParamField({
     setIsInteracting(false)
     setDraftValue(resolvedValue)
 
-    if (areParamValuesEqual(resolvedValue, lastCommittedValueRef.current)) {
+    if (JSON.stringify(resolvedValue) === JSON.stringify(lastCommittedValueRef.current)) {
       return
     }
 
@@ -266,6 +240,25 @@ function EffectParamField({
       window.removeEventListener('pointercancel', handlePointerRelease)
     }
   }, [isInteracting, param.type])
+
+  // Toggle type uses horizontal BasicSettingRow layout
+  if (param.type === 'toggle') {
+    return (
+      <BasicSettingRow
+        label={label}
+        disabled={disabled}
+        control={(
+          <div className="flex justify-end">
+            <SettingSwitch
+              checked={value === true}
+              disabled={disabled}
+              onToggle={() => onChange(value !== true)}
+            />
+          </div>
+        )}
+      />
+    )
+  }
 
   let control: React.ReactNode = null
 
@@ -398,19 +391,6 @@ function EffectParamField({
       break
     }
 
-    case 'toggle': {
-      control = (
-        <div className="flex justify-start">
-          <SettingSwitch
-            checked={value === true}
-            disabled={disabled}
-            onToggle={() => onChange(value !== true)}
-          />
-        </div>
-      )
-      break
-    }
-
     case 'color': {
       const color = normalizeColor(value)
       control = (
@@ -495,7 +475,7 @@ function EffectParamField({
   }
 
   return (
-    <div className={cn('px-3 py-2.5 border-t border-foreground/[0.05]', disabled && 'opacity-65')}>
+    <div className={cn('px-3 py-2.5', disabled && 'opacity-65')}>
       <div className="mb-2 text-[12px] text-foreground/85">{label}</div>
       {control}
     </div>
@@ -507,14 +487,10 @@ export function LayoutManager() {
   const effects = useBridgeStore(s => s.effects)
   const layouts = useBridgeStore(s => s.layouts)
   const activeLayoutId = useBridgeStore(s => s.activeLayoutId)
-  const registerCanvas = useBridgeStore(s => s.registerCanvas)
-  const unregisterCanvas = useBridgeStore(s => s.unregisterCanvas)
   const setVirtualDevicePower = useBridgeStore(s => s.setVirtualDevicePower)
   const setVirtualDeviceEffect = useBridgeStore(s => s.setVirtualDeviceEffect)
   const updateVirtualDeviceEffectParams = useBridgeStore(s => s.updateVirtualDeviceEffectParams)
   const resetVirtualDeviceEffectParams = useBridgeStore(s => s.resetVirtualDeviceEffectParams)
-  const canvasBounds = useCanvasStore(s => s.canvasBounds)
-  const canvasLayoutId = useCanvasStore(s => s.layoutId)
 
   const activeLayout = useMemo(
     () => layouts.find(layout => layout.id === activeLayoutId) ?? null,
@@ -563,27 +539,10 @@ export function LayoutManager() {
     })
   }, [selectedEffect?.params, effectiveParams, locale])
 
-  const currentCanvasWidth = activeLayout && canvasLayoutId === activeLayout.id
-    ? Math.max(1, Math.round(canvasBounds.width))
-    : Math.max(1, Math.round(activeLayout?.canvas.width ?? 1))
-  const currentCanvasHeight = activeLayout && canvasLayoutId === activeLayout.id
-    ? Math.max(1, Math.round(canvasBounds.height))
-    : Math.max(1, Math.round(activeLayout?.canvas.height ?? 1))
-
-  const effectHint = !activeLayout?.registered
-    ? t('layoutManager.needRegister')
-    : resolveLocalizedText(selectedEffect?.description, locale)
-
-  const panelStatusTitle = activeLayout?.registered
+  const isRegistered = activeLayout?.registered === true
+  const panelStatusTitle = isRegistered
     ? t('layoutManager.status.registered')
     : t('layoutManager.status.unregistered')
-  const isRegistered = activeLayout?.registered === true
-  const rawOutputPayload = activeLayout?.virtual_device.raw_output ?? null
-  const rawOutputAvailable = rawOutputPayload != null
-  const rawOutputJson = useMemo(
-    () => rawOutputAvailable ? formatDebugJson(rawOutputPayload) : '',
-    [rawOutputAvailable, rawOutputPayload],
-  )
 
   return (
     <div className="flex flex-col h-full">
@@ -594,9 +553,7 @@ export function LayoutManager() {
         <span
           className={cn(
             'size-1.5 rounded-full shrink-0',
-            activeLayout?.registered
-              ? 'bg-emerald-500'
-              : 'bg-muted-foreground/25',
+            isRegistered ? 'bg-emerald-500' : 'bg-muted-foreground/25',
           )}
           title={panelStatusTitle}
         />
@@ -613,24 +570,6 @@ export function LayoutManager() {
           ) : (
             <div className="py-1">
               <div className="mx-1 rounded-[6px] overflow-hidden border border-foreground/[0.04] bg-foreground/[0.02]">
-                <BasicSettingRow
-                  label={t('layoutManager.register')}
-                  hint={!isRegistered ? t('layoutManager.needRegister') : undefined}
-                  control={(
-                    <div className="flex justify-end">
-                      <SettingSwitch
-                        checked={activeLayout.registered}
-                        onToggle={() => {
-                          if (activeLayout.registered) {
-                            unregisterCanvas(activeLayout.id)
-                          } else {
-                            registerCanvas(activeLayout.id, currentCanvasWidth, currentCanvasHeight)
-                          }
-                        }}
-                      />
-                    </div>
-                  )}
-                />
                 <BasicSettingRow
                   label={t('layoutManager.power')}
                   disabled={!isRegistered}
@@ -649,7 +588,6 @@ export function LayoutManager() {
                 />
                 <BasicSettingRow
                   label={t('layoutManager.effect')}
-                  hint={effectHint || undefined}
                   disabled={!isRegistered}
                   control={(
                     <select
@@ -704,7 +642,7 @@ export function LayoutManager() {
                   visibleParams.map(({ param, disabled, groupLabel, showGroup }) => (
                     <Fragment key={param.key}>
                       {showGroup && groupLabel ? (
-                        <div className="px-3 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/55">
+                        <div className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/55">
                           {groupLabel}
                         </div>
                       ) : null}
@@ -723,32 +661,6 @@ export function LayoutManager() {
                     </Fragment>
                   ))
                 )}
-              </div>
-
-              <div className="mx-1 mt-2 rounded-[6px] overflow-hidden border border-foreground/[0.04] bg-foreground/[0.02]">
-                <details>
-                  <summary className="cursor-pointer px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70 select-none">
-                    {t('layoutManager.rawJson')}
-                    <span className="ml-2 rounded-[999px] border border-border bg-secondary px-1.5 py-0.5 font-mono text-[10px] font-normal normal-case tracking-normal text-muted-foreground/65">
-                      / canvas
-                    </span>
-                    <span className="ml-2 text-[10px] font-normal tracking-normal text-muted-foreground/55">
-                      {rawOutputAvailable
-                        ? t('layoutManager.rawJson.ready')
-                        : t('layoutManager.rawJson.unavailable')}
-                    </span>
-                  </summary>
-                  <div className="border-t border-foreground/[0.05] px-3 py-3">
-                    <div className="mb-2 text-[11px] text-muted-foreground/65">
-                      {t('layoutManager.rawJson.description')}
-                    </div>
-                    <pre className="max-h-[260px] overflow-auto rounded-[8px] border border-border bg-secondary px-3 py-2 text-[11px] leading-[1.45] text-foreground/80 whitespace-pre-wrap break-all">
-                      {rawOutputAvailable
-                        ? rawOutputJson
-                        : t('layoutManager.rawJson.empty')}
-                    </pre>
-                  </div>
-                </details>
               </div>
             </div>
           )}

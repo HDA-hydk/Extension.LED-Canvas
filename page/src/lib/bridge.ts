@@ -71,8 +71,6 @@ export interface LayoutVirtualDeviceState {
   power_on: boolean
   effect_id: string | null
   effect_params: Record<string, unknown>
-  raw_device: unknown | null
-  raw_output: unknown | null
 }
 
 export interface LayoutInfo {
@@ -167,51 +165,27 @@ function normalizeLedColors(colors: unknown): LedColor[] {
   })
 }
 
-function normalizeVirtualDeviceState(value: unknown): LayoutVirtualDeviceState {
-  const raw = value && typeof value === 'object' ? value as Record<string, unknown> : {}
-  const effectId = typeof raw.effect_id === 'string' && raw.effect_id.trim().length > 0
-    ? raw.effect_id
-    : null
-  const effectParams = raw.effect_params && typeof raw.effect_params === 'object' && !Array.isArray(raw.effect_params)
-    ? raw.effect_params as Record<string, unknown>
-    : {}
-
-  return {
-    power_on: raw.power_on !== false,
-    effect_id: effectId,
-    effect_params: effectId ? effectParams : {},
-    raw_device: raw.raw_device ?? null,
-    raw_output: raw.raw_output ?? null,
-  }
-}
-
 function normalizeLayouts(layouts: unknown): LayoutInfo[] {
-  const rawLayouts = Array.isArray(layouts) ? layouts : []
-  return rawLayouts.flatMap((layout) => {
-    if (!layout || typeof layout !== 'object') return []
-    const raw = layout as LayoutInfo & Record<string, unknown>
-    return [{
-      ...raw,
-      placements: Array.isArray(raw.placements) ? raw.placements : [],
-      virtual_device: normalizeVirtualDeviceState(raw.virtual_device),
-    }]
-  })
+  if (!Array.isArray(layouts)) return []
+  return layouts.filter((l): l is LayoutInfo => !!l && typeof l === 'object' && typeof (l as LayoutInfo).id === 'string')
+    .map(layout => ({
+      ...layout,
+      placements: Array.isArray(layout.placements) ? layout.placements : [],
+      virtual_device: {
+        power_on: layout.virtual_device?.power_on !== false,
+        effect_id: layout.virtual_device?.effect_id ?? null,
+        effect_params: layout.virtual_device?.effect_params ?? {},
+      },
+    }))
 }
 
 function normalizeEffects(effects: unknown): EffectInfo[] {
-  const rawEffects = Array.isArray(effects) ? effects : []
-  return rawEffects.flatMap((effect) => {
-    if (!effect || typeof effect !== 'object') return []
-    const raw = effect as EffectInfo & Record<string, unknown>
-    const id = typeof raw.id === 'string' ? raw.id : null
-    if (!id) return []
-
-    return [{
-      ...raw,
-      id,
-      params: Array.isArray(raw.params) ? raw.params : [],
-    }]
-  })
+  if (!Array.isArray(effects)) return []
+  return effects.filter((e): e is EffectInfo => !!e && typeof e === 'object' && typeof (e as EffectInfo).id === 'string')
+    .map(effect => ({
+      ...effect,
+      params: Array.isArray(effect.params) ? effect.params : [],
+    }))
 }
 
 export const useBridgeStore = create<BridgeState>((set, get) => {

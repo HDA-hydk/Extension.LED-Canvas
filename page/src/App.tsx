@@ -1,6 +1,6 @@
 import './App.css'
-import { useEffect, useState, useRef, useMemo } from 'react'
-import { Magnet, Plus, X, Pencil, Check, ChevronDown, Search, CircleHelp } from 'lucide-react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
+import { Magnet, FilePlus2, Plus, X, Pencil, Check, ChevronDown, Search, CircleHelp } from 'lucide-react'
 import { DeviceTree } from '@/components/DeviceTree'
 import { LayoutManager } from '@/components/LayoutManager'
 import { VisualGrid } from '@/components/VisualGrid'
@@ -267,10 +267,13 @@ function App() {
   const createLayout = useBridgeStore(s => s.createLayout)
   const deleteLayout = useBridgeStore(s => s.deleteLayout)
   const renameLayout = useBridgeStore(s => s.renameLayout)
+  const registerCanvas = useBridgeStore(s => s.registerCanvas)
+  const unregisterCanvas = useBridgeStore(s => s.unregisterCanvas)
   const syncPlacements = useBridgeStore(s => s.syncPlacements)
   const updateSnap = useBridgeStore(s => s.updateSnap)
 
   const activeLayout = layouts.find(l => l.id === activeLayoutId) ?? null
+  const canvasRegistered = activeLayout?.registered ?? false
   const canvasWidth = Math.max(1, Math.round(canvasBounds.width))
   const canvasHeight = Math.max(1, Math.round(canvasBounds.height))
 
@@ -333,6 +336,15 @@ function App() {
     updateSnap(activeLayoutId, snapToGrid)
   }, [snapToGrid, activeLayoutId, updateSnap])
 
+  const handleToggleRegister = useCallback(() => {
+    if (!activeLayoutId) return
+    if (canvasRegistered) {
+      unregisterCanvas(activeLayoutId)
+    } else {
+      registerCanvas(activeLayoutId, canvasWidth, canvasHeight)
+    }
+  }, [activeLayoutId, canvasRegistered, canvasWidth, canvasHeight, registerCanvas, unregisterCanvas])
+
   return (
     <div className="relative h-screen w-screen p-[10px] flex flex-col gap-[10px] overflow-hidden">
       {/* ── Top bar: layout selector (left) + controls (right) ── */}
@@ -373,6 +385,19 @@ function App() {
           onEditStart={beginCanvasHistoryBatch}
           onEditEnd={endCanvasHistoryBatch}
         />
+        <button
+          className={cn(
+            'h-[40px] px-[14px] rounded-[10px] border cursor-pointer transition-colors flex items-center justify-center gap-[6px] text-[13px] font-medium',
+            canvasRegistered
+              ? 'bg-primary text-primary-foreground border-primary'
+              : 'bg-secondary border-border hover:bg-accent',
+          )}
+          onClick={handleToggleRegister}
+          title={canvasRegistered ? t('canvas.registered') : t('canvas.unregistered')}
+        >
+          <FilePlus2 className="size-4" />
+          {canvasRegistered ? t('canvas.deactivate') : t('canvas.register')}
+        </button>
         <button
           className={cn(
             'w-[40px] h-[40px] rounded-[10px] border cursor-pointer transition-colors flex items-center justify-center',
